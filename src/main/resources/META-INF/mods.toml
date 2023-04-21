@@ -1,0 +1,13 @@
+modLoader="javafml"
+loaderVersion="[39,)"
+license="LGPL-3.0-only"
+[[mods]]
+modId="reforgium"
+version="${version}"
+displayName="Reforgium"
+logoFile="icon.png"
+description='''
+Unofficial Fork of FRAPI and Indium that works with Forge
+'''
+credits="Asek3, comp500"
+authors="comp500"

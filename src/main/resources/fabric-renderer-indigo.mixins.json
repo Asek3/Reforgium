@@ -1,0 +1,15 @@
+{
+  "required": true,
+  "package": "net.fabricmc.fabric.mixin.client.indigo.renderer",
+  "compatibilityLevel": "JAVA_17",
+  "plugin": "link.infra.indium.ReforgiumMixinPlugin",
+  "client": [
+    "BlockModelRendererMixin",
+    "ChunkBuilderBuiltChunkRebuildTaskMixin",
+    "ChunkRendererRegionMixin",
+    "ItemRendererMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

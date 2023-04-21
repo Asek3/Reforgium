@@ -1,0 +1,480 @@
+/*
+ * Copyright (c) 2016, 2017, 2018, 2019 FabricMC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *	 http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package link.infra.indium.renderer.aocalc;
+
+import static java.lang.Math.max;
+import static link.infra.indium.renderer.helper.GeometryHelper.AXIS_ALIGNED_FLAG;
+import static link.infra.indium.renderer.helper.GeometryHelper.CUBIC_FLAG;
+import static link.infra.indium.renderer.helper.GeometryHelper.LIGHT_FACE_FLAG;
+import static me.jellysquid.mods.sodium.client.model.light.data.LightDataAccess.unpackAO;
+import static me.jellysquid.mods.sodium.client.model.light.data.LightDataAccess.unpackFO;
+import static me.jellysquid.mods.sodium.client.model.light.data.LightDataAccess.unpackLM;
+import static me.jellysquid.mods.sodium.client.model.light.data.LightDataAccess.unpackOP;
+import static net.minecraft.util.math.Direction.DOWN;
+import static net.minecraft.util.math.Direction.EAST;
+import static net.minecraft.util.math.Direction.NORTH;
+import static net.minecraft.util.math.Direction.SOUTH;
+import static net.minecraft.util.math.Direction.UP;
+import static net.minecraft.util.math.Direction.WEST;
+
+import java.util.BitSet;
+
+import net.minecraft.util.math.Vec3f;
+
+import link.infra.indium.Indium;
+import link.infra.indium.mixin.renderer.AccessAmbientOcclusionCalculator;
+import link.infra.indium.renderer.aocalc.AoFace.WeightFunction;
+import link.infra.indium.renderer.mesh.EncodingFormat;
+import link.infra.indium.renderer.mesh.MutableQuadViewImpl;
+import link.infra.indium.renderer.mesh.QuadViewImpl;
+import link.infra.indium.renderer.render.BlockRenderInfo;
+import me.jellysquid.mods.sodium.client.model.light.data.LightDataAccess;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Direction;
+import net.minecraft.util.math.MathHelper;
+
+/**
+ * Adaptation of inner, non-static class in BlockModelRenderer that serves same purpose.
+ */
+public class AoCalculator {
+	/**
+	 * Vanilla models with cubic quads have vertices in a certain order, which allows
+	 * us to map them using a lookup. Adapted from enum in vanilla AoCalculator.
+	 */
+	private static final int[][] VERTEX_MAP = new int[6][4];
+	static {
+		VERTEX_MAP[DOWN.getId()] = new int[] { 0, 1, 2, 3 };
+		VERTEX_MAP[UP.getId()] = new int[] { 2, 3, 0, 1 };
+		VERTEX_MAP[NORTH.getId()] = new int[] { 3, 0, 1, 2 };
+		VERTEX_MAP[SOUTH.getId()] = new int[] { 0, 1, 2, 3 };
+		VERTEX_MAP[WEST.getId()] = new int[] { 3, 0, 1, 2 };
+		VERTEX_MAP[EAST.getId()] = new int[] { 1, 2, 3, 0 };
+	}
+
+	private final AccessAmbientOcclusionCalculator vanillaCalc;
+	private final BlockRenderInfo blockInfo;
+	private final LightDataAccess lightCache;
+
+	/** caches results of {@link #computeFace(Direction, boolean, boolean)} for the current block. */
+	private final AoFaceData[] faceData = new AoFaceData[12];
+
+	/** indicates which elements of {@link #faceData} have been computed for the current block. */
+	private int completionFlags = 0;
+
+	/** holds per-corner weights - used locally to avoid new allocation. */
+	private final float[] w = new float[4];
+
+	// outputs
+	public final float[] ao = new float[4];
+	public final int[] light = new int[4];
+
+	public AoCalculator(BlockRenderInfo blockInfo, LightDataAccess lightCache) {
+		this.blockInfo = blockInfo;
+		this.lightCache = lightCache;
+		this.vanillaCalc = VanillaAoHelper.get();
+
+		for (int i = 0; i < 12; i++) {
+			faceData[i] = new AoFaceData();
+		}
+	}
+
+	/** call at start of each new block. */
+	public void clear() {
+		completionFlags = 0;
+	}
+
+	public void compute(MutableQuadViewImpl quad, boolean isVanilla) {
+		final AoConfig config = Indium.AMBIENT_OCCLUSION_MODE;
+
+		switch (config) {
+		case VANILLA:
+			// prevent NPE in error case of failed reflection for vanilla calculator access
+			if (vanillaCalc == null) {
+				calcFastVanilla(quad);
+			} else {
+				calcVanilla(quad);
+			}
+
+			break;
+
+		case EMULATE:
+			calcFastVanilla(quad);
+			break;
+
+		case HYBRID:
+		default:
+			if (isVanilla) {
+				calcFastVanilla(quad);
+			} else {
+				calcEnhanced(quad);
+			}
+
+			break;
+
+		case ENHANCED:
+			calcEnhanced(quad);
+		}
+	}
+
+	private void calcVanilla(MutableQuadViewImpl quad) {
+		calcVanilla(quad, ao, light);
+	}
+
+	// These are what vanilla AO calc wants, per its usage in vanilla code
+	// Because this instance is effectively thread-local, we preserve instances
+	// to avoid making a new allocation each call.
+	private final float[] vanillaAoData = new float[Direction.values().length * 2];
+	private final BitSet vanillaAoControlBits = new BitSet(3);
+	private final int[] vertexData = new int[EncodingFormat.QUAD_STRIDE];
+
+	private void calcVanilla(MutableQuadViewImpl quad, float[] aoDest, int[] lightDest) {
+		vanillaAoControlBits.clear();
+		final Direction face = quad.lightFace();
+		quad.toVanilla(0, vertexData, 0, false);
+
+		VanillaAoHelper.getQuadDimensions(blockInfo.blockView, blockInfo.blockState, blockInfo.blockPos, vertexData, face, vanillaAoData, vanillaAoControlBits);
+		vanillaCalc.indium$apply(blockInfo.blockView, blockInfo.blockState, blockInfo.blockPos, quad.lightFace(), vanillaAoData, vanillaAoControlBits, quad.hasShade());
+
+		System.arraycopy(vanillaCalc.indium$brightness(), 0, aoDest, 0, 4);
+		System.arraycopy(vanillaCalc.indium$light(), 0, lightDest, 0, 4);
+	}
+
+	private void calcFastVanilla(MutableQuadViewImpl quad) {
+		int flags = quad.geometryFlags();
+
+		// force to block face if shape is full cube - matches vanilla logic
+		if ((flags & LIGHT_FACE_FLAG) == 0 && (flags & AXIS_ALIGNED_FLAG) != 0 && blockInfo.blockState.isFullCube(blockInfo.blockView, blockInfo.blockPos)) {
+			flags |= LIGHT_FACE_FLAG;
+		}
+
+		if ((flags & CUBIC_FLAG) == 0) {
+			vanillaPartialFace(quad, (flags & LIGHT_FACE_FLAG) != 0);
+		} else {
+			vanillaFullFace(quad, (flags & LIGHT_FACE_FLAG) != 0);
+		}
+	}
+
+	private void calcEnhanced(MutableQuadViewImpl quad) {
+		switch (quad.geometryFlags()) {
+		case AXIS_ALIGNED_FLAG | CUBIC_FLAG | LIGHT_FACE_FLAG:
+		case AXIS_ALIGNED_FLAG | LIGHT_FACE_FLAG:
+			vanillaPartialFace(quad, true);
+			break;
+
+		case AXIS_ALIGNED_FLAG | CUBIC_FLAG:
+		case AXIS_ALIGNED_FLAG:
+			blendedPartialFace(quad);
+			break;
+
+		default:
+			irregularFace(quad);
+			break;
+		}
+	}
+
+	private void vanillaFullFace(QuadViewImpl quad, boolean isOnLightFace) {
+		final Direction lightFace = quad.lightFace();
+		computeFace(lightFace, isOnLightFace, quad.hasShade()).toArray(ao, light, VERTEX_MAP[lightFace.getId()]);
+	}
+
+	private void vanillaPartialFace(QuadViewImpl quad, boolean isOnLightFace) {
+		final Direction lightFace = quad.lightFace();
+		AoFaceData faceData = computeFace(lightFace, isOnLightFace, quad.hasShade());
+		final WeightFunction wFunc = AoFace.get(lightFace).weightFunc;
+		final float[] w = this.w;
+
+		for (int i = 0; i < 4; i++) {
+			wFunc.apply(quad, i, w);
+			light[i] = faceData.weightedCombinedLight(w);
+			ao[i] = faceData.weigtedAo(w);
+		}
+	}
+
+	/** used in {@link #blendedInsetFace(QuadViewImpl quad, int vertexIndex, Direction lightFace)} as return variable to avoid new allocation. */
+	AoFaceData tmpFace = new AoFaceData();
+
+	/** Returns linearly interpolated blend of outer and inner face based on depth of vertex in face. */
+	private AoFaceData blendedInsetFace(QuadViewImpl quad, int vertexIndex, Direction lightFace) {
+		final float w1 = AoFace.get(lightFace).depthFunc.apply(quad, vertexIndex);
+		final float w0 = 1 - w1;
+		return AoFaceData.weightedMean(computeFace(lightFace, true, quad.hasShade()), w0, computeFace(lightFace, false, quad.hasShade()), w1, tmpFace);
+	}
+
+	/**
+	 * Like {@link #blendedInsetFace(QuadViewImpl quad, int vertexIndex, Direction lightFace)} but optimizes if depth is 0 or 1.
+	 * Used for irregular faces when depth varies by vertex to avoid unneeded interpolation.
+	 */
+	private AoFaceData gatherInsetFace(QuadViewImpl quad, int vertexIndex, Direction lightFace) {
+		final float w1 = AoFace.get(lightFace).depthFunc.apply(quad, vertexIndex);
+
+		if (MathHelper.approximatelyEquals(w1, 0)) {
+			return computeFace(lightFace, true, quad.hasShade());
+		} else if (MathHelper.approximatelyEquals(w1, 1)) {
+			return computeFace(lightFace, false, quad.hasShade());
+		} else {
+			final float w0 = 1 - w1;
+			return AoFaceData.weightedMean(computeFace(lightFace, true, quad.hasShade()), w0, computeFace(lightFace, false, quad.hasShade()), w1, tmpFace);
+		}
+	}
+
+	private void blendedPartialFace(QuadViewImpl quad) {
+		final Direction lightFace = quad.lightFace();
+		AoFaceData faceData = blendedInsetFace(quad, 0, lightFace);
+		final WeightFunction wFunc = AoFace.get(lightFace).weightFunc;
+
+		for (int i = 0; i < 4; i++) {
+			wFunc.apply(quad, i, w);
+			light[i] = faceData.weightedCombinedLight(w);
+			ao[i] = faceData.weigtedAo(w);
+		}
+	}
+
+	/** used exclusively in irregular face to avoid new heap allocations each call. */
+	private final Vec3f vertexNormal = new Vec3f();
+
+	private void irregularFace(MutableQuadViewImpl quad) {
+		final Vec3f faceNorm = quad.faceNormal();
+		Vec3f normal;
+		final float[] w = this.w;
+		final float[] aoResult = this.ao;
+		final int[] lightResult = this.light;
+
+		for (int i = 0; i < 4; i++) {
+			normal = quad.hasNormal(i) ? quad.copyNormal(i, vertexNormal) : faceNorm;
+			float ao = 0, sky = 0, block = 0, maxAo = 0;
+			int maxSky = 0, maxBlock = 0;
+
+			final float x = normal.getX();
+
+			if (!MathHelper.approximatelyEquals(0f, x)) {
+				final Direction face = x > 0 ? Direction.EAST : Direction.WEST;
+				final AoFaceData fd = gatherInsetFace(quad, i, face);
+				AoFace.get(face).weightFunc.apply(quad, i, w);
+				final float n = x * x;
+				final float a = fd.weigtedAo(w);
+				final int s = fd.weigtedSkyLight(w);
+				final int b = fd.weigtedBlockLight(w);
+				ao += n * a;
+				sky += n * s;
+				block += n * b;
+				maxAo = a;
+				maxSky = s;
+				maxBlock = b;
+			}
+
+			final float y = normal.getY();
+
+			if (!MathHelper.approximatelyEquals(0f, y)) {
+				final Direction face = y > 0 ? Direction.UP : Direction.DOWN;
+				final AoFaceData fd = gatherInsetFace(quad, i, face);
+				AoFace.get(face).weightFunc.apply(quad, i, w);
+				final float n = y * y;
+				final float a = fd.weigtedAo(w);
+				final int s = fd.weigtedSkyLight(w);
+				final int b = fd.weigtedBlockLight(w);
+				ao += n * a;
+				sky += n * s;
+				block += n * b;
+				maxAo = Math.max(maxAo, a);
+				maxSky = Math.max(maxSky, s);
+				maxBlock = Math.max(maxBlock, b);
+			}
+
+			final float z = normal.getZ();
+
+			if (!MathHelper.approximatelyEquals(0f, z)) {
+				final Direction face = z > 0 ? Direction.SOUTH : Direction.NORTH;
+				final AoFaceData fd = gatherInsetFace(quad, i, face);
+				AoFace.get(face).weightFunc.apply(quad, i, w);
+				final float n = z * z;
+				final float a = fd.weigtedAo(w);
+				final int s = fd.weigtedSkyLight(w);
+				final int b = fd.weigtedBlockLight(w);
+				ao += n * a;
+				sky += n * s;
+				block += n * b;
+				maxAo = Math.max(maxAo, a);
+				maxSky = Math.max(maxSky, s);
+				maxBlock = Math.max(maxBlock, b);
+			}
+
+			aoResult[i] = (ao + maxAo) * 0.5f;
+			lightResult[i] = (((int) ((sky + maxSky) * 0.5f) & 0xF0) << 16) | ((int) ((block + maxBlock) * 0.5f) & 0xF0);
+		}
+	}
+
+	/**
+	 * Computes smoothed brightness and Ao shading for four corners of a block face.
+	 * Outer block face is what you normally see and what you get when the second
+	 * parameter is true. Inner is light *within* the block and usually darker.
+	 * It is blended with the outer face for inset surfaces, but is also used directly
+	 * in vanilla logic for some blocks that aren't full opaque cubes.
+	 * Except for parameterization, the logic itself is practically identical to vanilla.
+	 */
+	private AoFaceData computeFace(Direction lightFace, boolean isOnBlockFace, boolean shade) {
+		final int faceDataIndex = isOnBlockFace ? lightFace.getId() : lightFace.getId() + 6;
+		final int mask = 1 << faceDataIndex;
+		final AoFaceData result = faceData[faceDataIndex];
+
+		if ((completionFlags & mask) == 0) {
+			completionFlags |= mask;
+
+			final LightDataAccess cache = lightCache;
+			final BlockPos pos = blockInfo.blockPos;
+
+			final int x = pos.getX();
+			final int y = pos.getY();
+			final int z = pos.getZ();
+
+			final int lightPosX;
+			final int lightPosY;
+			final int lightPosZ;
+
+			if (isOnBlockFace) {
+				lightPosX = x + lightFace.getOffsetX();
+				lightPosY = y + lightFace.getOffsetY();
+				lightPosZ = z + lightFace.getOffsetZ();
+			} else {
+				lightPosX = x;
+				lightPosY = y;
+				lightPosZ = z;
+			}
+
+			AoFace aoFace = AoFace.get(lightFace);
+			Direction[] neighbors = aoFace.neighbors;
+
+			// Vanilla was further offsetting the positions for opaque block checks in the
+			// direction of the light face, but it was actually mis-sampling and causing
+			// visible artifacts in certain situations
+
+			final long word0 = cache.get(lightPosX, lightPosY, lightPosZ, neighbors[0]);
+			final int light0 = unpackLM(word0);
+			final float ao0 = unpackAO(word0);
+			final boolean isClear0 = unpackOP(word0);
+
+			final long word1 = cache.get(lightPosX, lightPosY, lightPosZ, neighbors[1]);
+			final int light1 = unpackLM(word1);
+			final float ao1 = unpackAO(word1);
+			final boolean isClear1 = unpackOP(word1);
+
+			final long word2 = cache.get(lightPosX, lightPosY, lightPosZ, neighbors[2]);
+			final int light2 = unpackLM(word2);
+			final float ao2 = unpackAO(word2);
+			final boolean isClear2 = unpackOP(word2);
+
+			final long word3 = cache.get(lightPosX, lightPosY, lightPosZ, neighbors[3]);
+			final int light3 = unpackLM(word3);
+			final float ao3 = unpackAO(word3);
+			final boolean isClear3 = unpackOP(word3);
+
+			// c = corner - values at corners of face
+			int cLight0, cLight1, cLight2, cLight3;
+			float cAo0, cAo1, cAo2, cAo3;
+
+			// If neighbors on both sides of the corner are opaque, then apparently we use the light/shade
+			// from one of the sides adjacent to the corner.  If either neighbor is clear (no light subtraction)
+			// then we use values from the outwardly diagonal corner. (outwardly = position is one more away from light face)
+			if (!isClear2 && !isClear0) {
+				cAo0 = ao0;
+				cLight0 = light0;
+			} else {
+				final long word02 = cache.get(lightPosX, lightPosY, lightPosZ, neighbors[0], neighbors[2]);
+				cAo0 = unpackAO(word02);
+				cLight0 = unpackLM(word02);
+			}
+
+			if (!isClear3 && !isClear0) {
+				cAo1 = ao0;
+				cLight1 = light0;
+			} else {
+				final long word03 = cache.get(lightPosX, lightPosY, lightPosZ, neighbors[0], neighbors[3]);
+				cAo1 = unpackAO(word03);
+				cLight1 = unpackLM(word03);
+			}
+
+			if (!isClear2 && !isClear1) {
+				cAo2 = ao1;
+				cLight2 = light1;
+			} else {
+				final long word12 = cache.get(lightPosX, lightPosY, lightPosZ, neighbors[1], neighbors[2]);
+				cAo2 = unpackAO(word12);
+				cLight2 = unpackLM(word12);
+			}
+
+			if (!isClear3 && !isClear1) {
+				cAo3 = ao1;
+				cLight3 = light1;
+			} else {
+				final long word13 = cache.get(lightPosX, lightPosY, lightPosZ, neighbors[1], neighbors[3]);
+				cAo3 = unpackAO(word13);
+				cLight3 = unpackLM(word13);
+			}
+
+			long centerWord = cache.get(lightPosX, lightPosY, lightPosZ);
+
+			// If on block face or neighbor isn't occluding, "center" will be neighbor brightness
+			// Doesn't use light pos because logic not based solely on this block's geometry
+			int lightCenter;
+
+			if (isOnBlockFace || !unpackFO(centerWord)) {
+				lightCenter = unpackLM(centerWord);
+			} else {
+				lightCenter = unpackLM(cache.get(x, y, z));
+			}
+
+			float aoCenter = unpackAO(centerWord);
+			float worldBrightness = blockInfo.blockView.getBrightness(lightFace, shade);
+
+			result.a0 = ((ao3 + ao0 + cAo1 + aoCenter) * 0.25F) * worldBrightness;
+			result.a1 = ((ao2 + ao0 + cAo0 + aoCenter) * 0.25F) * worldBrightness;
+			result.a2 = ((ao2 + ao1 + cAo2 + aoCenter) * 0.25F) * worldBrightness;
+			result.a3 = ((ao3 + ao1 + cAo3 + aoCenter) * 0.25F) * worldBrightness;
+
+			result.l0(meanBrightness(light3, light0, cLight1, lightCenter));
+			result.l1(meanBrightness(light2, light0, cLight0, lightCenter));
+			result.l2(meanBrightness(light2, light1, cLight2, lightCenter));
+			result.l3(meanBrightness(light3, light1, cLight3, lightCenter));
+		}
+
+		return result;
+	}
+
+	/**
+	 * Vanilla code excluded missing light values from mean but was not isotropic.
+	 * Still need to substitute or edges are too dark but consistently use the min
+	 * value from all four samples.
+	 */
+	private static int meanBrightness(int a, int b, int c, int d) {
+		return a == 0 || b == 0 || c == 0 || d == 0 ? meanEdgeBrightness(a, b, c, d) : meanInnerBrightness(a, b, c, d);
+	}
+
+	private static int meanInnerBrightness(int a, int b, int c, int d) {
+		// bitwise divide by 4, clamp to expected (positive) range
+		return a + b + c + d >> 2 & 0xFF00FF;
+	}
+
+	private static int nonZeroMin(int a, int b) {
+		if (a == 0) return b;
+		if (b == 0) return a;
+		return Math.min(a, b);
+	}
+
+	private static int meanEdgeBrightness(int a, int b, int c, int d) {
+		final int min = nonZeroMin(nonZeroMin(a, b), nonZeroMin(c, d));
+		return meanInnerBrightness(max(a, min), max(b, min), max(c, min), max(d, min));
+	}
+}
