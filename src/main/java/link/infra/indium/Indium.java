@@ -36,9 +36,12 @@ import net.fabricmc.fabric.impl.client.indigo.Indigo;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.AddReloadListenerEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.IExtensionPoint;
+import net.minecraftforge.fml.ModLoadingContext;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.loading.FMLLoader;
 import net.minecraftforge.fml.loading.FMLPaths;
+import net.minecraftforge.network.NetworkConstants;
 
 @Mod("reforgium")
 public class Indium {
@@ -122,6 +125,8 @@ public class Indium {
 		
 		if(rubidiumLoaded)
 			MinecraftForge.EVENT_BUS.register(this);
+		
+		ModLoadingContext.get().registerExtensionPoint(IExtensionPoint.DisplayTest.class, () -> new IExtensionPoint.DisplayTest(() -> NetworkConstants.IGNORESERVERONLY, (a, b) -> true));
 	}
 	
 	@SubscribeEvent

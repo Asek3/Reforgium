@@ -1,4 +1,4 @@
-package asek3.compatibility.flywheel;
+package asek3.compatibility;
 
 import java.util.List;
 import java.util.Set;

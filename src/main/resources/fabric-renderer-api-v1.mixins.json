@@ -1,5 +1,6 @@
 {
   "required": true,
+  "minVersion": "0.8",
   "package": "net.fabricmc.fabric.mixin.renderer",
   "compatibilityLevel": "JAVA_16",
   "client": [
