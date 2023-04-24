@@ -16,6 +16,7 @@
 
 package link.infra.indium.renderer.render;
 
+import java.util.Random;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -32,9 +33,8 @@ import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.model.BakedModel;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.random.Random;
 import net.minecraft.world.BlockRenderView;
-import net.minecraftforge.client.model.data.ModelData;
+import net.minecraftforge.client.model.data.IModelData;
 
 /**
  * Context for non-terrain block rendering.
@@ -66,21 +66,20 @@ public class BlockRenderContext extends MatrixRenderContext {
 		return bufferBuilder;
 	}
 
-	public boolean render(BlockRenderView blockView, BakedModel model, BlockState state, BlockPos pos, MatrixStack matrixStack, VertexConsumer buffer, Random random, long seed, int overlay, ModelData modelData, RenderLayer layer, boolean queryModelSpecificData) {
+	public boolean render(BlockRenderView blockView, BakedModel model, BlockState state, BlockPos pos, MatrixStack matrixStack, VertexConsumer buffer, Random random, long seed, int overlay, IModelData modelData) {
 		this.bufferBuilder = buffer;
 		this.matrix = matrixStack.peek().getPositionMatrix();
 		this.normalMatrix = matrixStack.peek().getNormalMatrix();
 		this.random = random;
 		this.seed = seed;
 		
-		if (queryModelSpecificData)
-		      modelData = model.getModelData(blockView, pos, state, modelData); 
+		modelData = model.getModelData(blockView, pos, state, modelData);
 
 		this.overlay = overlay;
 		this.didOutput = false;
 		aoCalc.clear();
 		blockInfo.setBlockView(blockView);
-		blockInfo.prepareForBlock(blockView, state, pos, model.useAmbientOcclusion(), modelData, layer);
+		blockInfo.prepareForBlock(blockView, state, pos, model.useAmbientOcclusion(), modelData);
 		lightCache.reset(pos, blockView);
 
 		((FabricBakedModel) model).emitBlockQuads(blockView, state, pos, randomSupplier, this);

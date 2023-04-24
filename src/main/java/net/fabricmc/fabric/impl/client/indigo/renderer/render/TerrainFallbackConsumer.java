@@ -17,6 +17,7 @@
 package net.fabricmc.fabric.impl.client.indigo.renderer.render;
 
 import java.util.List;
+import java.util.Random;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -28,7 +29,6 @@ import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.model.BakedModel;
 import net.minecraft.client.render.model.BakedQuad;
 import net.minecraft.util.math.Direction;
-import net.minecraft.util.math.random.Random;
 
 import net.fabricmc.fabric.api.renderer.v1.mesh.QuadEmitter;
 import net.fabricmc.fabric.api.renderer.v1.model.ModelHelper;
@@ -92,7 +92,7 @@ public abstract class TerrainFallbackConsumer extends AbstractQuadRenderer imple
 
 		for (int i = 0; i <= ModelHelper.NULL_FACE_ID; i++) {
 			final Direction cullFace = ModelHelper.faceFromIndex(i);
-			final List<BakedQuad> quads = model.getQuads(blockState, cullFace, random.get(), blockInfo.modelData, blockInfo.layer);
+			final List<BakedQuad> quads = model.getQuads(blockState, cullFace, random.get(), blockInfo.modelData);
 			final int count = quads.size();
 
 			if (count != 0) {

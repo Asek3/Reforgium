@@ -32,20 +32,19 @@ import java.util.BitSet;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import net.minecraft.block.BlockState;
-import net.minecraft.client.render.block.BlockModelRenderer;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
-import net.minecraft.util.math.MathHelper;
-import net.minecraft.util.math.Vec3f;
-import net.minecraft.world.BlockRenderView;
-
 import net.fabricmc.fabric.impl.client.indigo.Indigo;
+import net.fabricmc.fabric.impl.client.indigo.renderer.accessor.AccessAmbientOcclusionCalculator;
 import net.fabricmc.fabric.impl.client.indigo.renderer.aocalc.AoFace.WeightFunction;
 import net.fabricmc.fabric.impl.client.indigo.renderer.mesh.EncodingFormat;
 import net.fabricmc.fabric.impl.client.indigo.renderer.mesh.MutableQuadViewImpl;
 import net.fabricmc.fabric.impl.client.indigo.renderer.mesh.QuadViewImpl;
 import net.fabricmc.fabric.impl.client.indigo.renderer.render.BlockRenderInfo;
+import net.minecraft.block.BlockState;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Direction;
+import net.minecraft.util.math.MathHelper;
+import net.minecraft.util.math.Vec3f;
+import net.minecraft.world.BlockRenderView;
 
 /**
  * Adaptation of inner, non-static class in BlockModelRenderer that serves same purpose.
@@ -67,7 +66,7 @@ public abstract class AoCalculator {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(AoCalculator.class);
 
-	private final BlockModelRenderer.AmbientOcclusionCalculator vanillaCalc;
+	private final AccessAmbientOcclusionCalculator vanillaCalc;
 	private final BlockPos.Mutable lightPos = new BlockPos.Mutable();
 	private final BlockPos.Mutable searchPos = new BlockPos.Mutable();
 	protected final BlockRenderInfo blockInfo;
@@ -91,7 +90,7 @@ public abstract class AoCalculator {
 
 	public AoCalculator(BlockRenderInfo blockInfo) {
 		this.blockInfo = blockInfo;
-		this.vanillaCalc = new BlockModelRenderer.AmbientOcclusionCalculator();
+		this.vanillaCalc = VanillaAoHelper.get();
 
 		for (int i = 0; i < 24; i++) {
 			faceData[i] = new AoFaceData();
@@ -173,10 +172,10 @@ public abstract class AoCalculator {
 		quad.toVanilla(0, vertexData, 0, false);
 
 		VanillaAoHelper.updateShape(blockInfo.blockView, blockInfo.blockState, blockInfo.blockPos, vertexData, lightFace, vanillaAoData, vanillaAoControlBits);
-		vanillaCalc.apply(blockInfo.blockView, blockInfo.blockState, blockInfo.blockPos, lightFace, vanillaAoData, vanillaAoControlBits, quad.hasShade());
+		vanillaCalc.fabric_apply(blockInfo.blockView, blockInfo.blockState, blockInfo.blockPos, lightFace, vanillaAoData, vanillaAoControlBits, quad.hasShade());
 
-		System.arraycopy(vanillaCalc.brightness, 0, aoDest, 0, 4);
-		System.arraycopy(vanillaCalc.light, 0, lightDest, 0, 4);
+		System.arraycopy(vanillaCalc.fabric_colorMultiplier(), 0, aoDest, 0, 4);
+		System.arraycopy(vanillaCalc.fabric_brightness(), 0, lightDest, 0, 4);
 	}
 
 	private void calcFastVanilla(MutableQuadViewImpl quad) {

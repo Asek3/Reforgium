@@ -17,6 +17,7 @@
 package net.fabricmc.fabric.impl.client.indigo.renderer.render;
 
 import java.util.List;
+import java.util.Random;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -41,7 +42,6 @@ import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3f;
-import net.minecraft.util.math.random.Random;
 
 import net.fabricmc.fabric.api.renderer.v1.material.BlendMode;
 import net.fabricmc.fabric.api.renderer.v1.mesh.Mesh;
@@ -69,7 +69,7 @@ public class ItemRenderContext extends AbstractRenderContext {
 	}
 
 	private final ItemColors colorMap;
-	private final Random random = Random.create();
+	private final Random random = new Random();
 	private final Vec3f normalVec = new Vec3f();
 
 	private final Supplier<Random> randomSupplier = () -> {

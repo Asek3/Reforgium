@@ -5,8 +5,11 @@
   "compatibilityLevel": "JAVA_17",
   "plugin": "link.infra.indium.ReforgiumMixinPlugin",
   "client": [
+    "AmbientOcclusionCalculatorMixin",
     "BlockModelRendererMixin",
     "ChunkBuilderBuiltChunkRebuildTaskMixin",
+    "ChunkRenderDataMixin",
+    "ChunkRendererMixin",
     "ChunkRendererRegionMixin",
     "ItemRendererMixin"
   ],

@@ -23,6 +23,7 @@ import net.minecraft.block.BlockState;
 import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.chunk.BlockBufferBuilderStorage;
 import net.minecraft.client.render.chunk.ChunkBuilder.BuiltChunk;
+import net.minecraft.client.render.chunk.ChunkBuilder.ChunkData;
 import net.minecraft.client.render.chunk.ChunkRendererRegion;
 import net.minecraft.client.render.model.BakedModel;
 import net.minecraft.client.util.math.MatrixStack;
@@ -33,7 +34,7 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Matrix3f;
 import net.minecraft.util.math.Matrix4f;
 import net.minecraft.world.BlockRenderView;
-import net.minecraftforge.client.model.data.ModelData;
+import net.minecraftforge.client.model.data.IModelData;
 import net.fabricmc.fabric.api.renderer.v1.mesh.Mesh;
 import net.fabricmc.fabric.api.renderer.v1.mesh.QuadEmitter;
 import net.fabricmc.fabric.api.renderer.v1.model.FabricBakedModel;
@@ -96,9 +97,9 @@ public class TerrainRenderContext extends AbstractRenderContext {
 		}
 	};
 
-	public void prepare(ChunkRendererRegion blockView, BuiltChunk chunkRenderer, BuiltChunk.RebuildTask.RenderData renderData, BlockBufferBuilderStorage builders, Set<RenderLayer> initializedLayers) {
+	public void prepare(ChunkRendererRegion blockView, BuiltChunk chunkRenderer, ChunkData renderData, BlockBufferBuilderStorage builders) {
 		blockInfo.prepareForWorld(blockView, true);
-		chunkInfo.prepare(blockView, chunkRenderer, renderData, builders, initializedLayers);
+		chunkInfo.prepare(blockView, chunkRenderer, renderData, builders);
 	}
 
 	public void release() {
@@ -107,16 +108,15 @@ public class TerrainRenderContext extends AbstractRenderContext {
 	}
 
 	/** Called from chunk renderer hook. */
-	public void tessellateBlock(BlockRenderView blockView, BlockState blockState, BlockPos blockPos, final BakedModel model, MatrixStack matrixStack, ModelData data, RenderLayer layer, boolean queryModelSpecificData) {
+	public boolean tessellateBlock(BlockRenderView blockView, BlockState blockState, BlockPos blockPos, final BakedModel model, MatrixStack matrixStack, IModelData data) {
 		this.matrix = matrixStack.peek().getPositionMatrix();
 		this.normalMatrix = matrixStack.peek().getNormalMatrix();
 		
-		if (queryModelSpecificData)
-			data = model.getModelData(blockView, blockPos, blockState, data); 
+		data = model.getModelData(blockView, blockPos, blockState, data);
 
 		try {
 			aoCalc.clear();
-			blockInfo.prepareForBlock(blockView, blockState, blockPos, model.useAmbientOcclusion(), data, layer);
+			blockInfo.prepareForBlock(blockView, blockState, blockPos, model.useAmbientOcclusion(), data);
 			((FabricBakedModel) model).emitBlockQuads(blockInfo.blockView, blockInfo.blockState, blockInfo.blockPos, blockInfo.randomSupplier, this);
 		} catch (Throwable throwable) {
 			CrashReport crashReport = CrashReport.create(throwable, "Tessellating block in world - Indigo Renderer");
@@ -124,6 +124,9 @@ public class TerrainRenderContext extends AbstractRenderContext {
 			CrashReportSection.addBlockInfo(crashReportSection, chunkInfo.blockView, blockPos, blockState);
 			throw new CrashException(crashReport);
 		}
+		
+		// false because we've already marked the chunk as populated - caller doesn't need to
+		return false;
 	}
 
 	@Override

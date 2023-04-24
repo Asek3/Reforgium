@@ -16,6 +16,7 @@
 
 package net.fabricmc.fabric.impl.client.indigo.renderer.render;
 
+import java.util.Random;
 import java.util.function.Supplier;
 
 import org.jetbrains.annotations.Nullable;
@@ -26,11 +27,11 @@ import net.minecraft.block.BlockState;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.color.block.BlockColors;
 import net.minecraft.client.render.RenderLayer;
+import net.minecraft.client.render.RenderLayers;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
-import net.minecraft.util.math.random.Random;
 import net.minecraft.world.BlockRenderView;
-import net.minecraftforge.client.model.data.ModelData;
+import net.minecraftforge.client.model.data.IModelData;
 
 /**
  * Holds, manages and provides access to the block/world related state
@@ -42,7 +43,7 @@ import net.minecraftforge.client.model.data.ModelData;
 public class BlockRenderInfo {
 	private final BlockColors blockColorMap = MinecraftClient.getInstance().getBlockColors();
 	private final BlockPos.Mutable searchPos = new BlockPos.Mutable();
-	private final Random random = Random.create();
+	private final Random random = new Random();
 	public BlockRenderView blockView;
 	public BlockPos blockPos;
 	public BlockState blockState;
@@ -51,8 +52,7 @@ public class BlockRenderInfo {
 	RenderLayer defaultLayer;
 	
 	// Forge
-	public ModelData modelData;
-	public RenderLayer layer;
+	public IModelData modelData;
 
 	private boolean enableCulling;
 	private int cullCompletionFlags;
@@ -76,17 +76,16 @@ public class BlockRenderInfo {
 		this.enableCulling = enableCulling;
 	}
 
-	public void prepareForBlock(BlockRenderView blockView, BlockState blockState, BlockPos blockPos, boolean modelAO, ModelData modelData, RenderLayer layer) {
+	public void prepareForBlock(BlockRenderView blockView, BlockState blockState, BlockPos blockPos, boolean modelAO, IModelData modelData) {
 		this.blockPos = blockPos;
 		this.blockState = blockState;
 		this.modelData = modelData;
-		this.layer = layer;
 		// in the unlikely case seed actually matches this, we'll simply retrieve it more than once
 		seed = -1L;
 		defaultAo = modelAO && MinecraftClient.isAmbientOcclusionEnabled() && blockState.getLightEmission(blockView, blockPos) == 0;
 
 		// TODO Check if correct logic
-		defaultLayer = layer;
+		defaultLayer = RenderLayers.getBlockLayer(blockState);
 		//defaultLayer = RenderLayers.getBlockLayer(blockState);
 
 		cullCompletionFlags = 0;

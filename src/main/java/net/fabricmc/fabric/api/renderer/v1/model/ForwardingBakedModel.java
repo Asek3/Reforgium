@@ -16,14 +16,19 @@
 
 package net.fabricmc.fabric.api.renderer.v1.model;
 
+import java.util.Collections;
 import java.util.List;
+import java.util.Random;
 import java.util.function.Supplier;
 
 import org.jetbrains.annotations.NotNull;
 
+import com.mojang.datafixers.util.Pair;
+
 import net.fabricmc.fabric.api.renderer.v1.render.RenderContext;
 import net.minecraft.block.BlockState;
 import net.minecraft.client.render.RenderLayer;
+import net.minecraft.client.render.RenderLayers;
 import net.minecraft.client.render.model.BakedModel;
 import net.minecraft.client.render.model.BakedQuad;
 import net.minecraft.client.render.model.json.ModelOverrideList;
@@ -33,9 +38,8 @@ import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
-import net.minecraft.util.math.random.Random;
 import net.minecraft.world.BlockRenderView;
-import net.minecraftforge.client.model.data.ModelData;
+import net.minecraftforge.client.model.data.IModelData;
 
 /**
  * Base class for specialized model implementations that need to wrap other baked models.
@@ -108,37 +112,28 @@ public abstract class ForwardingBakedModel implements BakedModel, FabricBakedMod
 	// FORGE ZONE
 	
 	@Override
-	public List<BakedQuad> getQuads(BlockState blockState, Direction face, Random rand, ModelData data, RenderLayer layer) {
-		return wrapped.getQuads(blockState, face, rand, data, layer);
+	public List<BakedQuad> getQuads(BlockState blockState, Direction face, Random rand, IModelData data) {
+		return wrapped.getQuads(blockState, face, rand, data);
 	}
 	
 	@Override
-	public Sprite getParticleIcon(@NotNull ModelData data) {
+	public Sprite getParticleIcon(@NotNull IModelData data) {
         return wrapped.getParticleIcon(data);
     }
 	
 	@Override
-	public BakedModel applyTransform(ModelTransformation.Mode transformType, MatrixStack poseStack, boolean applyLeftHandTransform) {
-        return wrapped.applyTransform(transformType, poseStack, applyLeftHandTransform);
+	public BakedModel handlePerspective(ModelTransformation.Mode cameraTransformType, MatrixStack poseStack) {
+        return net.minecraftforge.client.ForgeHooksClient.handlePerspective(wrapped, cameraTransformType, poseStack);
     }
 
 	@Override
 	public boolean useAmbientOcclusion(BlockState state) {
         return wrapped.useAmbientOcclusion(state);
     }
-
-	@Override
-	public boolean useAmbientOcclusion(BlockState state, RenderLayer renderType) {
-        return wrapped.useAmbientOcclusion(state, renderType);
-    }
 	
 	@Override
-	public List<RenderLayer> getRenderTypes(ItemStack itemStack, boolean fabulous) {
-        return wrapped.getRenderTypes(itemStack, fabulous);
+	public List<Pair<BakedModel, RenderLayer>> getLayerModels(ItemStack itemStack, boolean fabulous) {
+        return Collections.singletonList(Pair.of(wrapped, RenderLayers.getItemLayer(itemStack, fabulous)));
     }
-
-	@Override
-	public List<BakedModel> getRenderPasses(ItemStack itemStack, boolean fabulous) {
-        return wrapped.getRenderPasses(itemStack, fabulous);
-    }
+	
 }

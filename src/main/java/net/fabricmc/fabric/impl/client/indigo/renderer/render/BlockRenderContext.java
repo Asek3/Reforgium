@@ -16,6 +16,7 @@
 
 package net.fabricmc.fabric.impl.client.indigo.renderer.render;
 
+import java.util.Random;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -29,9 +30,7 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Matrix3f;
 import net.minecraft.util.math.Matrix4f;
 import net.minecraft.world.BlockRenderView;
-import net.minecraftforge.client.model.data.ModelData;
-import net.minecraft.util.math.random.Random;
-
+import net.minecraftforge.client.model.data.IModelData;
 import net.fabricmc.fabric.api.renderer.v1.mesh.Mesh;
 import net.fabricmc.fabric.api.renderer.v1.mesh.QuadEmitter;
 import net.fabricmc.fabric.api.renderer.v1.model.FabricBakedModel;
@@ -108,20 +107,19 @@ public class BlockRenderContext extends AbstractRenderContext {
 		return bufferBuilder;
 	}
 
-	public void render(BlockRenderView blockView, BakedModel model, BlockState state, BlockPos pos, MatrixStack matrixStack, VertexConsumer buffer, boolean cull, Random random, long seed, int overlay, ModelData modelData, RenderLayer renderType, boolean queryModelSpecificData) {
+	public void render(BlockRenderView blockView, BakedModel model, BlockState state, BlockPos pos, MatrixStack matrixStack, VertexConsumer buffer, boolean cull, Random random, long seed, int overlay, IModelData modelData) {
 		this.bufferBuilder = buffer;
 		this.matrix = matrixStack.peek().getPositionMatrix();
 		this.normalMatrix = matrixStack.peek().getNormalMatrix();
 		this.random = random;
 		this.seed = seed;
 
-		if (queryModelSpecificData)
-		      modelData = model.getModelData(blockView, pos, state, modelData); 
+		modelData = model.getModelData(blockView, pos, state, modelData);
 		
 		this.overlay = overlay;
 		aoCalc.clear();
 		blockInfo.prepareForWorld(blockView, cull);
-		blockInfo.prepareForBlock(blockView, state, pos, model.useAmbientOcclusion(), modelData, renderType);
+		blockInfo.prepareForBlock(blockView, state, pos, model.useAmbientOcclusion(), modelData);
 
 		((FabricBakedModel) model).emitBlockQuads(blockView, state, pos, randomSupplier, this);
 

@@ -25,7 +25,7 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.math.Vec3i;
 import net.minecraft.world.BlockView;
-import net.minecraftforge.client.model.data.ModelData;
+import net.minecraftforge.client.model.data.IModelData;
 
 public class TerrainRenderContext extends AbstractRenderContext {
 	private final TerrainBlockRenderInfo blockInfo;
@@ -66,14 +66,14 @@ public class TerrainRenderContext extends AbstractRenderContext {
 	}
 
 	/** Called from chunk renderer hook. */
-	public boolean tessellateBlock(BlockView level, BlockState blockState, BlockPos blockPos, BlockPos origin, final BakedModel model, Vec3d modelOffset, ModelData modelData, RenderLayer layer) {
+	public boolean tessellateBlock(BlockView level, BlockState blockState, BlockPos blockPos, BlockPos origin, final BakedModel model, Vec3d modelOffset, IModelData modelData) {
 		this.origin = origin;
 		this.modelOffset = modelOffset;
 
 		try {
 			chunkInfo.didOutput = false;
 			aoCalc.clear();
-			blockInfo.prepareForBlock(level, blockState, blockPos, model.useAmbientOcclusion(), modelData, layer);
+			blockInfo.prepareForBlock(level, blockState, blockPos, model.useAmbientOcclusion(), modelData);
 			((FabricBakedModel) model).emitBlockQuads(blockInfo.blockView, blockInfo.blockState, blockInfo.blockPos, blockInfo.randomSupplier, this);
 		} catch (Throwable throwable) {
 			CrashReport crashReport = CrashReport.create(throwable, "Tessellating block in world - Reforgium Renderer");

@@ -22,7 +22,6 @@ import java.util.function.Supplier;
 
 import link.infra.indium.Indium;
 import link.infra.indium.mixin.renderer.AccessAmbientOcclusionCalculator;
-import link.infra.indium.renderer.accessor.AccessBlockModelRenderer;
 import net.minecraft.block.BlockState;
 import net.minecraft.client.render.block.BlockModelRenderer;
 import net.minecraft.util.math.BlockPos;
@@ -34,10 +33,10 @@ public class VanillaAoHelper {
 
 	// Renderer method we call isn't declared as static, but uses no
 	// instance data and is called from multiple threads in vanilla also.
-	private static AccessBlockModelRenderer blockRenderer;
+	private static BlockModelRenderer blockRenderer;
 
 	public static void initialize(BlockModelRenderer instance) {
-		blockRenderer = (AccessBlockModelRenderer) instance;
+		blockRenderer = instance;
 
 		for (Class<?> innerClass : BlockModelRenderer.class.getDeclaredClasses()) {
 			if (innerClass.getName().contains("AmbientOcclusionFace")) {
@@ -48,7 +47,7 @@ public class VanillaAoHelper {
 					@Override
 					public AccessAmbientOcclusionCalculator get() {
 						try {
-							return (AccessAmbientOcclusionCalculator) constructor.newInstance();
+							return (AccessAmbientOcclusionCalculator) constructor.newInstance(instance);
 						} catch (Exception e) {
 							Indium.LOGGER.warn("[Reforgium] Exception accessing vanilla smooth lighter", e);
 							return null;
@@ -73,6 +72,6 @@ public class VanillaAoHelper {
 	}
 
 	public static void getQuadDimensions(BlockRenderView blockRenderView, BlockState blockState, BlockPos pos, int[] vertexData, Direction face, float[] aoData, BitSet controlBits) {
-		blockRenderer.indium$getQuadDimensions(blockRenderView, blockState, pos, vertexData, face, aoData, controlBits);
+		blockRenderer.getQuadDimensions(blockRenderView, blockState, pos, vertexData, face, aoData, controlBits);
 	}
 }

@@ -17,6 +17,7 @@
 package link.infra.indium.renderer.render;
 
 import java.util.List;
+import java.util.Random;
 import java.util.function.Supplier;
 
 import org.jetbrains.annotations.Nullable;
@@ -34,7 +35,6 @@ import net.minecraft.block.BlockState;
 import net.minecraft.client.render.model.BakedModel;
 import net.minecraft.client.render.model.BakedQuad;
 import net.minecraft.util.math.Direction;
-import net.minecraft.util.math.random.Random;
 
 /**
  * Consumer for vanilla baked models. Generally intended to give visual results matching a vanilla render,
@@ -88,7 +88,7 @@ public class BaseFallbackConsumer extends BaseQuadRenderer implements BakedModel
 
 		for (int i = 0; i <= ModelHelper.NULL_FACE_ID; i++) {
 			final Direction cullFace = ModelHelper.faceFromIndex(i);
-			final List<BakedQuad> quads = model.getQuads(state, cullFace, random.get(), blockInfo.modelData, blockInfo.layer);
+			final List<BakedQuad> quads = model.getQuads(state, cullFace, random.get(), blockInfo.modelData);
 			final int count = quads.size();
 
 			if (count != 0) {

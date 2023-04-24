@@ -16,6 +16,7 @@
 
 package link.infra.indium.renderer.render;
 
+import java.util.Random;
 import java.util.function.Supplier;
 
 import net.fabricmc.fabric.api.renderer.v1.material.BlendMode;
@@ -23,12 +24,12 @@ import net.minecraft.block.BlockState;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.color.block.BlockColors;
 import net.minecraft.client.render.RenderLayer;
+import net.minecraft.client.render.RenderLayers;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
-import net.minecraft.util.math.random.Random;
 import net.minecraft.world.BlockRenderView;
 import net.minecraft.world.BlockView;
-import net.minecraftforge.client.model.data.ModelData;
+import net.minecraftforge.client.model.data.IModelData;
 
 /**
  * Holds, manages and provides access to the block/world related state
@@ -39,7 +40,7 @@ import net.minecraftforge.client.model.data.ModelData;
  */
 public class BlockRenderInfo {
 	private final BlockColors blockColorMap = MinecraftClient.getInstance().getBlockColors();
-	public final Random random = Random.create();
+	public final Random random = new Random();
 	public BlockRenderView blockView;
 	public BlockPos blockPos;
 	public BlockState blockState;
@@ -48,8 +49,7 @@ public class BlockRenderInfo {
 	RenderLayer defaultLayer;
 	
 	// Forge
-	public ModelData modelData;
-	public RenderLayer layer;
+	public IModelData modelData;
 
 	public final Supplier<Random> randomSupplier = () -> {
 		final Random result = random;
@@ -68,17 +68,16 @@ public class BlockRenderInfo {
 		this.blockView = blockView;
 	}
 
-	public void prepareForBlock(BlockView level, BlockState blockState, BlockPos blockPos, boolean modelAO, ModelData modelData, RenderLayer layer) {
+	public void prepareForBlock(BlockView level, BlockState blockState, BlockPos blockPos, boolean modelAO, IModelData modelData) {
 		this.blockPos = blockPos;
 		this.blockState = blockState;
 		this.modelData = modelData;
-		this.layer = layer;
 		// in the unlikely case seed actually matches this, we'll simply retrieve it more than one
 		seed = -1L;
 		defaultAo = modelAO && MinecraftClient.isAmbientOcclusionEnabled() && blockState.getLightEmission(level, blockPos) == 0;
 
 		// TODO Check if corrrect logic
-		defaultLayer = layer;
+		defaultLayer = RenderLayers.getBlockLayer(blockState);
 		//defaultLayer = RenderLayers.getBlockLayer(blockState);
 	}
 

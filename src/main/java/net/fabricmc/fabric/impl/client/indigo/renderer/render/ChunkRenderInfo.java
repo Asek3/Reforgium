@@ -28,10 +28,12 @@ import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.WorldRenderer;
 import net.minecraft.client.render.chunk.BlockBufferBuilderStorage;
 import net.minecraft.client.render.chunk.ChunkBuilder.BuiltChunk;
+import net.minecraft.client.render.chunk.ChunkBuilder.ChunkData;
 import net.minecraft.client.render.chunk.ChunkRendererRegion;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.BlockRenderView;
-
+import net.fabricmc.fabric.impl.client.indigo.renderer.accessor.AccessChunkRenderer;
+import net.fabricmc.fabric.impl.client.indigo.renderer.accessor.AccessChunkRendererData;
 import net.fabricmc.fabric.impl.client.indigo.renderer.aocalc.AoLuminanceFix;
 
 /**
@@ -68,10 +70,9 @@ public class ChunkRenderInfo {
 	private final Long2FloatOpenHashMap aoLevelCache;
 
 	private final BlockPos.Mutable chunkOrigin = new BlockPos.Mutable();
-	BuiltChunk.RebuildTask.RenderData renderData;
+	AccessChunkRendererData renderData;
 	BuiltChunk chunkRenderer;
 	BlockBufferBuilderStorage builders;
-	Set<RenderLayer> initializedLayers;
 	BlockRenderView blockView;
 
 	private final Object2ObjectOpenHashMap<RenderLayer, BufferBuilder> buffers = new Object2ObjectOpenHashMap<>();
@@ -83,13 +84,12 @@ public class ChunkRenderInfo {
 		aoLevelCache.defaultReturnValue(Float.MAX_VALUE);
 	}
 
-	void prepare(ChunkRendererRegion blockView, BuiltChunk chunkRenderer, BuiltChunk.RebuildTask.RenderData renderData, BlockBufferBuilderStorage builders, Set<RenderLayer> initializedLayers) {
+	void prepare(ChunkRendererRegion blockView, BuiltChunk chunkRenderer, ChunkData renderData, BlockBufferBuilderStorage builders) {
 		this.blockView = blockView;
 		this.chunkOrigin.set(chunkRenderer.getOrigin());
-		this.renderData = renderData;
+		this.renderData = (AccessChunkRendererData) renderData;
 		this.chunkRenderer = chunkRenderer;
 		this.builders = builders;
-		this.initializedLayers = initializedLayers;
 		buffers.clear();
 		brightnessCache.clear();
 		aoLevelCache.clear();
@@ -108,8 +108,11 @@ public class ChunkRenderInfo {
 		if (builder == null) {
 			builder = builders.get(renderLayer);
 
-			if (initializedLayers.add(renderLayer)) {
-				chunkRenderer.beginBufferBuilding(builder);
+			renderData.fabric_markPopulated(renderLayer);
+			buffers.put(renderLayer, builder);
+
+			if (renderData.fabric_markInitialized(renderLayer)) {
+				((AccessChunkRenderer) chunkRenderer).fabric_beginBufferBuilding(builder);
 			}
 
 			buffers.put(renderLayer, builder);

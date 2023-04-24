@@ -14,15 +14,23 @@
  * limitations under the License.
  */
 
-package link.infra.indium.renderer.accessor;
+package net.fabricmc.fabric.impl.client.indigo.renderer.accessor;
 
-import java.util.BitSet;
+import net.minecraft.client.render.RenderLayer;
 
-import net.minecraft.block.BlockState;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
-import net.minecraft.world.BlockRenderView;
+public interface AccessChunkRendererData {
+	/**
+	 * Mark internal tracking set that buffer has been initialized.
+	 *
+	 * @param renderLayer  Layer to be initialized.
+	 * @return {@code true} if layer was not already initialized.
+	 */
+	boolean fabric_markInitialized(RenderLayer renderLayer);
 
-public interface AccessBlockModelRenderer {
-	void indium$getQuadDimensions(BlockRenderView blockRenderView, BlockState blockState, BlockPos pos, int[] vertexData, Direction face, float[] aoData, BitSet controlBits);
+	/**
+	 * Mark internal tracking set that buffer has content.
+	 *
+	 * @param renderLayer  Layer with content.
+	 */
+	void fabric_markPopulated(RenderLayer renderLayer);
 }

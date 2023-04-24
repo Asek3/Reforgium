@@ -17,13 +17,11 @@ import me.jellysquid.mods.sodium.client.render.pipeline.BlockRenderer;
 import me.jellysquid.mods.sodium.client.util.task.CancellationSource;
 import net.fabricmc.fabric.api.renderer.v1.model.FabricBakedModel;
 import net.minecraft.block.BlockState;
-import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.model.BakedModel;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
-import net.minecraft.util.math.random.Random;
 import net.minecraft.world.BlockRenderView;
-import net.minecraftforge.client.model.data.ModelData;
+import net.minecraftforge.client.model.data.IModelData;
 
 /**
  * The main injection point into Sodium - here we stop Sodium from rendering FRAPI block models, and do it ourselves
@@ -42,14 +40,14 @@ public abstract class MixinChunkRenderRebuildTask extends ChunkRenderBuildTask {
 		TerrainRenderContext.get(buildContext).release();
 	}
 
-	@Redirect(method = "performBuild", at = @At(value = "INVOKE", target = "Lme/jellysquid/mods/sodium/client/render/pipeline/BlockRenderer;renderModel(Lnet/minecraft/world/BlockRenderView;Lnet/minecraft/block/BlockState;Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/client/render/model/BakedModel;Lme/jellysquid/mods/sodium/client/render/chunk/compile/buffers/ChunkModelBuilder;ZJLnet/minecraftforge/client/model/data/ModelData;Lnet/minecraft/client/render/RenderLayer;Lnet/minecraft/util/math/random/Random;)Z"))
-	public boolean onRenderBlock(BlockRenderer blockRenderer, BlockRenderView world, BlockState state, BlockPos pos, BlockPos origin, BakedModel model, ChunkModelBuilder buffers, boolean cull, long seed, ModelData modelData, RenderLayer layer, Random random, ChunkBuildContext buildContext, CancellationSource cancellationSource) {
+	@Redirect(method = "performBuild", at = @At(value = "INVOKE", target = "Lme/jellysquid/mods/sodium/client/render/pipeline/BlockRenderer;renderModel(Lnet/minecraft/world/BlockRenderView;Lnet/minecraft/block/BlockState;Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/client/render/model/BakedModel;Lme/jellysquid/mods/sodium/client/render/chunk/compile/buffers/ChunkModelBuilder;ZJLnet/minecraftforge/client/model/data/IModelData;)Z"))
+	public boolean onRenderBlock(BlockRenderer blockRenderer, BlockRenderView world, BlockState state, BlockPos pos, BlockPos origin, BakedModel model, ChunkModelBuilder buffers, boolean cull, long seed, IModelData modelData, ChunkBuildContext buildContext, CancellationSource cancellationSource) {
 		// We need to get the model with a bit more context than BlockRenderer has, so we do it here
 		if (!Indium.ALWAYS_TESSELLATE_INDIUM && ((FabricBakedModel) model).isVanillaAdapter()) {
-			return blockRenderer.renderModel(world, state, pos, origin, model, buffers, cull, seed, modelData, layer, random);
+			return blockRenderer.renderModel(world, state, pos, origin, model, buffers, cull, seed, modelData);
 		} else {
 			Vec3d modelOffset = state.getModelOffset(world, pos);
-			return TerrainRenderContext.get(buildContext).tessellateBlock(world, state, pos, origin, model, modelOffset, modelData, layer);
+			return TerrainRenderContext.get(buildContext).tessellateBlock(world, state, pos, origin, model, modelOffset, modelData);
 		}
 	}
 }
