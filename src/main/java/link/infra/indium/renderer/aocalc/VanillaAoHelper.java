@@ -40,7 +40,7 @@ public class VanillaAoHelper {
 		blockRenderer = (AccessBlockModelRenderer) instance;
 
 		for (Class<?> innerClass : BlockModelRenderer.class.getDeclaredClasses()) {
-			if (innerClass.getName().equals("AmbientOcclusionFace")) {
+			if (innerClass.getName().contains("AmbientOcclusionFace")) {
 				Constructor<?> constructor = innerClass.getDeclaredConstructors()[0];
 				constructor.setAccessible(true);
 
