@@ -33,12 +33,12 @@ import link.infra.indium.renderer.ReforgiumRenderer;
 import link.infra.indium.renderer.aocalc.AoConfig;
 import net.fabricmc.fabric.api.renderer.v1.RendererAccess;
 import net.fabricmc.fabric.impl.client.indigo.Indigo;
-import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.event.AddReloadListenerEvent;
+import net.minecraftforge.client.event.RegisterClientReloadListenersEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.IExtensionPoint;
 import net.minecraftforge.fml.ModLoadingContext;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import net.minecraftforge.fml.loading.FMLLoader;
 import net.minecraftforge.fml.loading.FMLPaths;
 import net.minecraftforge.network.NetworkConstants;
@@ -124,13 +124,13 @@ public class Indium {
 		}
 		
 		if(rubidiumLoaded)
-			MinecraftForge.EVENT_BUS.register(this);
+			FMLJavaModLoadingContext.get().getModEventBus().register(this);
 		
 		ModLoadingContext.get().registerExtensionPoint(IExtensionPoint.DisplayTest.class, () -> new IExtensionPoint.DisplayTest(() -> NetworkConstants.IGNORESERVERONLY, (a, b) -> true));
 	}
 	
 	@SubscribeEvent
-	public void addListener(AddReloadListenerEvent event) {
-		event.addListener(SpriteFinderCache.ReloadListener.INSTANCE);
+	public void addListener(RegisterClientReloadListenersEvent event) {
+		event.registerReloadListener(SpriteFinderCache.ReloadListener.INSTANCE);
 	}
 }
